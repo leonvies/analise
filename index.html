@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="pt-br" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SU-NO - Plataforma de Serviços</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .glass-nav {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-slide-in {
+            animation: slideIn 0.4s ease-out forwards;
+        }
+
+        .service-card {
+            transition: all 0.2s ease;
+        }
+
+        .service-card:not(.disabled):hover {
+            transform: translateY(-2px);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-darkBg dark:text-white min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-darkBg/80 glass-nav">
+        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <div class="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-500/20 text-white">
+                    <i data-lucide="briefcase" class="w-5 h-5"></i>
+                </div>
+                <span class="font-bold text-xl tracking-tight hidden sm:inline">SU-NO</span>
+            </div>
+
+            <!-- Balanço / Crédito -->
+            <div id="balanceDisplay" class="flex items-center gap-3 px-4 py-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <div class="text-right">
+                    <p class="text-[9px] font-bold uppercase opacity-50 leading-none">Meu Crédito</p>
+                    <p id="balanceValue" class="text-sm font-black text-emerald-500">R$ 0,00</p>
+                </div>
+                <button id="payDebtBtn" onclick="payDebt()" class="hidden bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95">
+                    QUITAR DÍVIDA
+                </button>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+                <button id="modeToggleBtn" onclick="toggleViewMode()" class="flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all shadow-sm bg-emerald-600 text-white hover:bg-emerald-700">
+                    <i data-lucide="briefcase" id="modeIcon" class="w-4 h-4"></i>
+                    <span id="modeText" class="hidden sm:inline">Modo Prestador</span>
+                </button>
+                
+                <button onclick="toggleTheme()" class="p-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-yellow-400 transition-colors">
+                    <i data-lucide="sun" id="themeIconSun" class="hidden dark:block w-5 h-5"></i>
+                    <i data-lucide="moon" id="themeIconMoon" class="block dark:hidden w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-3xl mx-auto w-full px-4 py-8 flex-grow">
+        
+        <!-- Alerta de Dívida -->
+        <div id="debtAlert" class="hidden mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-3 animate-slide-in">
+            <i data-lucide="alert-triangle" class="w-5 h-5 flex-shrink-0"></i>
+            <p class="text-sm font-medium">Você possui uma dívida ativa com a plataforma. Quite o débito para aceitar novos serviços.</p>
+        </div>
+        
+        <!-- CLIENT VIEW -->
+        <div id="clientView" class="hidden space-y-8 animate-slide-in">
+            <section class="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-darkCard shadow-sm">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                    <i data-lucide="plus-circle" class="text-blue-500"></i> Solicitar Novo Serviço
+                </h2>
+                <form id="orderForm" onsubmit="handleNewOrder(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium opacity-70">Tipo de Serviço</label>
+                        <select id="srvType" class="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 appearance-none">
+                            <option value="mecanica">Mecânica</option>
+                            <option value="lavanderia">Lavanderia</option>
+                            <option value="pintor">Pintor</option>
+                            <option value="diarista">Diarista</option>
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium opacity-70">Valor Ofertado (R$)</label>
+                        <input id="srvValue" type="number" placeholder="Ex: 250" required class="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium opacity-70">Para quando?</label>
+                        <input id="srvDate" type="date" required class="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium opacity-70">Localidade</label>
+                        <input id="srvLoc" type="text" placeholder="Ex: Vila Mariana, SP" required class="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button type="submit" class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]">
+                        Publicar Pedido
+                    </button>
+                </form>
+            </section>
+
+            <section>
+                <h3 class="text-xs font-bold mb-4 opacity-50 uppercase tracking-widest">Meus Pedidos Recentes</h3>
+                <div id="myOrdersList" class="space-y-3"></div>
+            </section>
+        </div>
+
+        <!-- PROVIDER VIEW -->
+        <div id="providerView" class="animate-slide-in">
+            <div class="mb-6 flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold">Serviços Disponíveis</h2>
+                    <div class="flex items-center gap-2 text-emerald-500 text-sm mt-1">
+                        <i data-lucide="zap" class="w-4 h-4 animate-pulse"></i>
+                        <span>Atualizando em tempo real</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="availableOrdersList" class="space-y-4"></div>
+        </div>
+
+        <!-- JOB ACTIVE VIEW -->
+        <div id="jobView" class="hidden animate-slide-in space-y-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-2xl font-bold flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Serviço em Andamento
+                </h2>
+                <button onclick="cancelActiveJob()" class="text-sm font-medium text-red-500 hover:underline">Abandonar</button>
+            </div>
+
+            <div class="w-full h-64 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-lg relative bg-slate-200 dark:bg-slate-800">
+                <iframe id="mapIframe" width="100%" height="100%" frameborder="0" scrolling="no" src=""></iframe>
+                <div class="absolute bottom-4 right-4 bg-white dark:bg-slate-900 p-3 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-200 dark:border-slate-700">
+                    <div class="bg-blue-600 p-2 rounded-lg text-white"><i data-lucide="navigation" class="w-4 h-4"></i></div>
+                    <div>
+                        <p class="text-[10px] font-bold uppercase opacity-50 leading-none">Destino</p>
+                        <p id="jobMapLoc" class="text-sm font-bold">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="md:col-span-2 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-darkCard shadow-sm">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-blue-500 border border-slate-200 dark:border-slate-700">
+                            <i data-lucide="user" class="w-8 h-8"></i>
+                        </div>
+                        <div>
+                            <h3 id="jobClientName" class="text-xl font-bold">---</h3>
+                            <p class="text-sm opacity-60 flex items-center gap-1">
+                                <i data-lucide="star" class="w-3 h-3 fill-yellow-500 text-yellow-500"></i>
+                                4.9 • Cliente Verificado
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                         <p id="jobDateDisplay" class="text-sm font-bold text-blue-500 flex items-center gap-1">
+                            <i data-lucide="calendar" class="w-4 h-4"></i> ---
+                        </p>
+                        <p id="jobDetails" class="text-sm font-medium opacity-80">---</p>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <button class="flex-grow flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95">
+                        <i data-lucide="message-square" class="w-5 h-5"></i> WhatsApp
+                    </button>
+                    <button onclick="finishJob()" class="py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold hover:opacity-90 transition-all border border-slate-700">
+                        Finalizar Serviço
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Confirmação -->
+    <div id="confirmModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+        <div class="w-full max-w-md p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-darkCard shadow-2xl">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="check-circle" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-2xl font-bold mb-2">Confirmar Serviço</h3>
+                <p class="opacity-70 mb-6 text-sm">Aceitar <span id="modalSrvType" class="font-bold text-blue-500 capitalize"></span> em <span id="modalSrvLoc" class="font-bold"></span>?</p>
+                <div class="p-4 rounded-2xl mb-6 text-left bg-slate-50 dark:bg-slate-900">
+                    <div class="flex justify-between mb-1"><span class="opacity-60 text-xs text-blue-500 font-bold">Data agendada:</span><span id="modalDate" class="font-bold text-sm"></span></div>
+                    <div class="flex justify-between mb-1"><span class="opacity-60 text-xs">Valor bruto:</span><span id="modalGross" class="font-bold"></span></div>
+                    <div class="flex justify-between text-red-500"><span class="text-xs">Taxa plataforma (10%):</span><span id="modalFee" class="font-bold"></span></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="closeModal()" class="py-3 rounded-xl font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">Cancelar</button>
+                    <button onclick="executeAccept()" class="bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold shadow-lg">Estou Certo!</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="border-t border-slate-200 dark:border-slate-800 py-6 bg-white dark:bg-darkBg text-center">
+        <p class="text-[10px] opacity-40 tracking-widest uppercase font-bold text-slate-500">SU-NO Financial System &copy; 2024</p>
+    </footer>
+
+    <script>
+        const SERVICE_TYPES = {
+            mecanica: { label: 'Mecânica', icon: 'wrench', avg: 250 },
+            lavanderia: { label: 'Lavanderia', icon: 'droplets', avg: 80 },
+            pintor: { label: 'Pintor', icon: 'paintbrush', avg: 450 },
+            diarista: { label: 'Diarista', icon: 'home', avg: 180 }
+        };
+
+        const LOCATIONS = ['Centro, SP', 'Jardins, SP', 'Vila Mariana, SP', 'Pinheiros, SP', 'Moema, SP', 'Lapa, SP', 'Santana, SP'];
+        const NAMES = ['João Silva', 'Maria Oliveira', 'Carlos Souza', 'Ana Santos', 'Roberto Lima', 'Fernanda Costa'];
+
+        function getFriendlyDate(dateStr) {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const target = new Date(dateStr + "T00:00:00");
+            const diffTime = target - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) return "Hoje";
+            if (diffDays === 1) return "Amanhã";
+            if (diffDays > 1 && diffDays < 7) return `Daqui a ${diffDays} dias`;
+            if (diffDays >= 7 && diffDays < 14) return "Próxima semana";
+            if (diffDays >= 14) return "Daqui a 2 semanas";
+            return target.toLocaleDateString('pt-BR');
+        }
+
+        let orders = [{ 
+            id: 1, type: 'pintor', value: 500, location: 'Centro, São Paulo', 
+            avg: 450, status: 'pending', isNew: false, distance: 1.2, 
+            client: 'João Silva', date: new Date().toISOString().split('T')[0] 
+        }];
+        
+        let balance = 0;
+        let currentView = 'provider'; 
+        let selectedOrderId = null;
+        let activeJob = null;
+
+        window.onload = () => {
+            document.getElementById('srvDate').value = new Date().toISOString().split('T')[0];
+            renderOrders();
+            updateBalanceUI();
+            lucide.createIcons();
+            startSimulation();
+        };
+
+        function toggleTheme() { document.documentElement.classList.toggle('dark'); }
+
+        function toggleViewMode() {
+            if(activeJob) { alert("Finalize o serviço ativo primeiro."); return; }
+            currentView = currentView === 'client' ? 'provider' : 'client';
+            updateUIByView();
+        }
+
+        function updateBalanceUI() {
+            const valEl = document.getElementById('balanceValue');
+            const payBtn = document.getElementById('payDebtBtn');
+            const alertEl = document.getElementById('debtAlert');
+            valEl.innerText = `R$ ${balance.toFixed(2).replace('.', ',')}`;
+            if (balance < 0) {
+                valEl.classList.replace('text-emerald-500', 'text-red-500');
+                payBtn.classList.remove('hidden');
+                alertEl.classList.remove('hidden');
+            } else {
+                valEl.classList.replace('text-red-500', 'text-emerald-500');
+                payBtn.classList.add('hidden');
+                alertEl.classList.add('hidden');
+            }
+            renderOrders();
+        }
+
+        function payDebt() {
+            balance = 0;
+            updateBalanceUI();
+            const toast = document.createElement('div');
+            toast.className = "fixed bottom-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-full font-bold shadow-2xl z-50 animate-bounce";
+            toast.innerText = "Saldo SU-NO regularizado! Já pode aceitar novos serviços.";
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function updateUIByView() {
+            const views = ['clientView', 'providerView', 'jobView'];
+            views.forEach(v => document.getElementById(v).classList.add('hidden'));
+            const btn = document.getElementById('modeToggleBtn');
+            const text = document.getElementById('modeText');
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            if (currentView === 'client') {
+                document.getElementById('clientView').classList.remove('hidden');
+                btn.className = "flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700";
+                text.innerText = "Modo Cliente";
+                updateModeIcon('user');
+            } else if (currentView === 'provider') {
+                document.getElementById('providerView').classList.remove('hidden');
+                btn.className = "flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all shadow-sm bg-emerald-600 text-white hover:bg-emerald-700";
+                text.innerText = "Modo Prestador";
+                updateModeIcon('briefcase');
+            } else if (currentView === 'job') {
+                document.getElementById('jobView').classList.remove('hidden');
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+            lucide.createIcons();
+        }
+
+        function updateModeIcon(iconName) {
+            const iconEl = document.getElementById('modeIcon');
+            iconEl.setAttribute('data-lucide', iconName);
+            lucide.createIcons();
+        }
+
+        function handleNewOrder(e) {
+            e.preventDefault();
+            const type = document.getElementById('srvType').value;
+            const value = parseFloat(document.getElementById('srvValue').value);
+            const location = document.getElementById('srvLoc').value;
+            const date = document.getElementById('srvDate').value;
+            orders.unshift({
+                id: Date.now(), type, value, location, date,
+                avg: SERVICE_TYPES[type].avg,
+                status: 'pending', isNew: false,
+                distance: (Math.random() * 10).toFixed(1),
+                client: NAMES[Math.floor(Math.random() * NAMES.length)]
+            });
+            renderOrders();
+            e.target.reset();
+            document.getElementById('srvDate').value = new Date().toISOString().split('T')[0];
+        }
+
+        function renderOrders() {
+            const clientList = document.getElementById('myOrdersList');
+            const providerList = document.getElementById('availableOrdersList');
+            clientList.innerHTML = '';
+            providerList.innerHTML = '';
+            const pending = orders.filter(o => o.status === 'pending');
+            const hasDebt = balance < 0;
+            if (pending.length === 0) {
+                providerList.innerHTML = `<div class="text-center py-20 opacity-40"><i data-lucide="search" class="w-12 h-12 mx-auto mb-4"></i><p>Aguardando chamadas...</p></div>`;
+            }
+            pending.forEach(order => {
+                const srv = SERVICE_TYPES[order.type];
+                const dateLabel = getFriendlyDate(order.date);
+                const pCard = document.createElement('div');
+                pCard.className = `service-card p-6 rounded-3xl border bg-white dark:bg-darkCard border-slate-200 dark:border-slate-800 ${hasDebt ? 'opacity-70 grayscale-[0.5]' : ''}`;
+                pCard.innerHTML = `
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div class="flex items-start gap-4">
+                            <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-900 text-slate-600"><i data-lucide="${srv.icon}" class="w-7 h-7"></i></div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-xl font-bold capitalize">${srv.label}</h3>
+                                    <span class="text-sm bg-blue-500/10 text-blue-500 px-3 py-1 rounded-full font-bold flex items-center gap-1">
+                                        <i data-lucide="calendar" class="w-3.5 h-3.5"></i> ${dateLabel}
+                                    </span>
+                                </div>
+                                <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm opacity-60 mt-1">
+                                    <span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i> ${order.location}</span>
+                                    <span class="flex items-center gap-1 text-blue-500 font-bold"><i data-lucide="navigation" class="w-3 h-3"></i> a ${order.distance} km</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-3">
+                            <div class="text-right">
+                                <span class="text-[10px] uppercase font-bold opacity-40 block">Valor Ofertado</span>
+                                <span class="text-3xl font-black text-emerald-500 tracking-tighter">R$ ${order.value}</span>
+                            </div>
+                            <div class="flex gap-2 w-full">
+                                <button onclick="rejectOrder(${order.id})" class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-red-500"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
+                                <button ${hasDebt ? 'disabled' : `onclick="openModal(${order.id})"`} class="flex-1 flex items-center justify-center gap-2 ${hasDebt ? 'bg-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 active:scale-95'} text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg">
+                                    ${hasDebt ? '<i data-lucide="lock" class="w-4 h-4"></i> Bloqueado' : 'Aceitar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                providerList.appendChild(pCard);
+                const cCard = document.createElement('div');
+                cCard.className = "p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 flex items-center justify-between";
+                cCard.innerHTML = `<div class="flex items-center gap-4"><div class="bg-blue-100 p-2 rounded-lg text-blue-600"><i data-lucide="${srv.icon}" class="w-5 h-5"></i></div><div><p class="font-bold capitalize">${srv.label}</p><p class="text-xs font-medium text-blue-500">${dateLabel}</p><p class="text-[10px] opacity-60">${order.location}</p></div></div><div class="text-right"><p class="font-bold text-emerald-500">R$ ${order.value}</p><span class="text-[9px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500 uppercase font-bold">Procurando...</span></div>`;
+                clientList.appendChild(cCard);
+            });
+            lucide.createIcons();
+        }
+
+        function openModal(id) {
+            const order = orders.find(o => o.id === id);
+            selectedOrderId = id;
+            document.getElementById('modalSrvType').innerText = SERVICE_TYPES[order.type].label;
+            document.getElementById('modalSrvLoc').innerText = order.location;
+            document.getElementById('modalDate').innerText = getFriendlyDate(order.date) + " (" + new Date(order.date + "T00:00:00").toLocaleDateString('pt-BR') + ")";
+            document.getElementById('modalGross').innerText = `R$ ${order.value.toFixed(2)}`;
+            document.getElementById('modalFee').innerText = `- R$ ${(order.value * 0.1).toFixed(2)}`;
+            document.getElementById('confirmModal').classList.replace('hidden', 'flex');
+        }
+
+        function closeModal() { document.getElementById('confirmModal').classList.replace('flex', 'hidden'); }
+
+        function executeAccept() {
+            activeJob = orders.find(o => o.id === selectedOrderId);
+            orders = orders.filter(o => o.id !== selectedOrderId);
+            closeModal();
+            currentView = 'job';
+            document.getElementById('jobMapLoc').innerText = activeJob.location;
+            document.getElementById('jobClientName').innerText = activeJob.client;
+            document.getElementById('jobDateDisplay').innerHTML = `<i data-lucide="calendar" class="w-4 h-4"></i> Agendado para: ${getFriendlyDate(activeJob.date)}`;
+            document.getElementById('jobDetails').innerText = `Contratado por R$ ${activeJob.value.toFixed(2)}. Taxa SU-NO: R$ ${(activeJob.value * 0.1).toFixed(2)}`;
+            document.getElementById('mapIframe').src = `https://maps.google.com/maps?q=${encodeURIComponent(activeJob.location)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+            updateUIByView();
+        }
+
+        function finishJob() {
+            const fee = activeJob.value * 0.1;
+            balance -= fee; 
+            activeJob = null;
+            currentView = 'provider';
+            updateBalanceUI();
+            updateUIByView();
+            renderOrders();
+        }
+
+        function cancelActiveJob() {
+            if(confirm("Abandonar serviço?")) { activeJob = null; currentView = 'provider'; updateUIByView(); renderOrders(); }
+        }
+
+        function rejectOrder(id) { orders = orders.filter(o => o.id !== id); renderOrders(); }
+
+        function startSimulation() {
+            setInterval(() => {
+                if (Math.random() > 0.75 && currentView !== 'job') {
+                    const keys = Object.keys(SERVICE_TYPES);
+                    const type = keys[Math.floor(Math.random() * keys.length)];
+                    const randDays = Math.floor(Math.random() * 15);
+                    const simDate = new Date();
+                    simDate.setDate(simDate.getDate() + randDays);
+                    const dateStr = simDate.toISOString().split('T')[0];
+                    orders.unshift({
+                        id: Date.now(), type, value: Math.round(SERVICE_TYPES[type].avg * (0.8 + Math.random() * 0.5)),
+                        location: LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)],
+                        avg: SERVICE_TYPES[type].avg, status: 'pending', isNew: true,
+                        distance: (Math.random() * 12).toFixed(1),
+                        client: NAMES[Math.floor(Math.random() * NAMES.length)],
+                        date: dateStr
+                    });
+                    if (orders.length > 15) orders.pop();
+                    renderOrders();
+                }
+            }, 6000);
+        }
+    </script>
+</body>
+</html>
