@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ChemScan Pro - Analisador Químico</title>
+    <title>ChemScan Pro - Visão Espacial e Química</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -19,9 +19,30 @@
             transform: scale(1.05);
         }
 
-        /* Hide scrollbar */
+        /* Esconder scrollbar */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .bounding-box {
+            position: absolute;
+            border: 2px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            pointer-events: none;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+        }
+        
+        .box-label {
+            background: #3b82f6;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 0 0 4px 0;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-hidden">
@@ -29,11 +50,356 @@
     <!-- Header -->
     <header class="p-4 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800 flex items-center justify-between z-50">
         <div class="flex items-center gap-2">
-            <div class="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-900/40">
-                <i data-lucide="atom" class="text-white w-6 h-6"></i>
+            <div class="bg-blue-600 p-2 rounded-xl shadow-lg">
+                <i data-lucide="ruler" class="text-white w-6 h-6"></i>
             </div>
-            <h1 class="font-bold text-xl tracking-tight text-white">ChemScan <span class="text-blue-500 font-light text-sm">PRO</span></h1>
+            <h1 class="font-bold text-xl tracking-tight text-white">ChemScan <span class="text-blue-500 font-light text-sm">SPATIAL</span></h1>
         </div>
+        <button id="reset-btn" class="hidden p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
+            <i data-lucide="refresh-cw" class="w-5 h-5 text-slate-300"></i>
+        </button>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="flex-1 relative flex flex-col bg-black overflow-hidden">
+        
+        <!-- Tela de Ativação -->
+        <div id="setup-view" class="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-8 bg-slate-950 z-40">
+            <div class="p-8 rounded-full bg-slate-900 border-4 border-blue-500/30 animate-pulse">
+                <i data-lucide="maximize" class="w-12 h-12 text-blue-500"></i>
+            </div>
+            <div class="space-y-4">
+                <h2 class="text-2xl font-black text-white">Pronto para Medir</h2>
+                <p class="text-slate-400 text-sm max-w-xs mx-auto leading-relaxed">
+                    Aponte para objetos para medir dimensões, distâncias e analisar a composição química simultaneamente.
+                </p>
+            </div>
+            <button id="start-camera-btn" class="w-full max-w-xs py-5 bg-blue-600 hover:bg-blue-500 text-white font-black text-lg rounded-2xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+                <i data-lucide="camera" class="w-6 h-6"></i>
+                LIGAR SENSORES
+            </button>
+        </div>
+
+        <!-- Visualização da Câmara -->
+        <div id="camera-view" class="hidden relative flex-1">
+            <video id="video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover z-10"></video>
+            
+            <!-- Interface de Scan -->
+            <div class="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center">
+                <div id="scan-frame" class="w-72 h-72 border-2 border-white/20 rounded-[2.5rem] transition-all duration-300 flex items-center justify-center relative">
+                    <i data-lucide="scan" id="scan-icon" class="text-white/20 w-10 h-10"></i>
+                    
+                    <!-- Cantos Estilizados -->
+                    <div class="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-blue-500/40 rounded-tl-[2.5rem]"></div>
+                    <div class="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-blue-500/40 rounded-br-[2.5rem]"></div>
+                </div>
+
+                <div class="mt-12 text-center">
+                    <div class="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
+                        <p id="status-text" class="text-white font-bold text-xs uppercase tracking-widest">Segure na tela para escanear</p>
+                    </div>
+                </div>
+
+                <!-- Barra de Progresso -->
+                <div id="progress-container" class="hidden absolute bottom-20 left-10 right-10 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-blue-500 w-0"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualização de Resultados -->
+        <div id="results-view" class="hidden flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950 no-scrollbar pb-32">
+            
+            <!-- Preview com Bounding Boxes -->
+            <div class="relative w-full aspect-video bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl" id="image-preview-container">
+                <img id="captured-image" class="w-full h-full object-cover" src="" alt="Captura">
+                <div id="box-overlay" class="absolute inset-0"></div>
+            </div>
+
+            <!-- Dados Principais -->
+            <div class="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-lg">
+                <span class="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em]">Objeto Identificado</span>
+                <h2 id="result-name" class="text-3xl font-black mt-1 text-white leading-none">---</h2>
+                <p id="result-summary" class="text-slate-400 mt-3 text-sm leading-relaxed">A processar...</p>
+            </div>
+
+            <!-- Tabs de Análise -->
+            <div class="grid grid-cols-2 gap-2 bg-slate-900/50 p-1 rounded-2xl border border-slate-800">
+                <button id="tab-chemistry" class="py-3 px-4 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-2">
+                    <i data-lucide="atom" class="w-4 h-4"></i> QUÍMICA
+                </button>
+                <button id="tab-spatial" class="py-3 px-4 rounded-xl text-slate-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2">
+                    <i data-lucide="ruler" class="w-4 h-4"></i> ESPACIAL
+                </button>
+            </div>
+
+            <!-- Conteúdo Química -->
+            <div id="content-chemistry" class="space-y-3">
+                <div id="elements-list" class="grid gap-2"></div>
+            </div>
+
+            <!-- Conteúdo Espacial -->
+            <div id="content-spatial" class="hidden space-y-3">
+                <div class="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-slate-500 font-bold uppercase">Dimensões Reais (Est.)</span>
+                        <i data-lucide="maximize-2" class="w-4 h-4 text-blue-400"></i>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                            <p class="text-[10px] text-slate-500 font-bold">LARGURA</p>
+                            <p id="spatial-width" class="text-xl font-black text-white">--</p>
+                        </div>
+                        <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                            <p class="text-[10px] text-slate-500 font-bold">ALTURA</p>
+                            <p id="spatial-height" class="text-xl font-black text-white">--</p>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-800">
+                        <p class="text-[10px] text-slate-500 font-bold mb-2">DISTÂNCIAS NO CENÁRIO</p>
+                        <ul id="distances-list" class="space-y-2 text-sm text-slate-300">
+                            <!-- Injetado aqui -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fixed bottom-6 left-6 right-6 z-50">
+                <button id="new-analysis-btn" class="w-full py-5 bg-white text-black font-black text-lg rounded-2xl shadow-2xl active:scale-95 transition-all">
+                    NOVA ANÁLISE
+                </button>
+            </div>
+        </div>
+
+        <!-- Hidden canvas for image capture -->
+        <canvas id="canvas" class="hidden"></canvas>
+    </main>
+
+    <!-- Overlay Loader -->
+    <div id="analysis-loader" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-10 text-center">
+        <div class="w-20 h-20 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+        <h3 class="mt-8 text-xl font-black text-white">Sincronizando Sensores</h3>
+        <p class="mt-2 text-slate-400 text-sm">Calculando distâncias e composição atómica...</p>
+    </div>
+
+    <!-- Erro -->
+    <div id="error-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/95">
+        <div class="bg-slate-900 border border-red-500/30 p-8 rounded-[2rem] max-w-sm w-full shadow-2xl">
+            <i data-lucide="alert-triangle" class="w-12 h-12 text-red-500 mb-4 mx-auto"></i>
+            <h3 class="font-black text-xl text-center mb-2">Falha na Leitura</h3>
+            <p id="error-message" class="text-slate-400 text-sm text-center mb-8">Erro inesperado.</p>
+            <button id="error-close-btn" class="w-full py-4 bg-red-600/10 text-red-500 rounded-2xl font-black border border-red-500/20 active:scale-95">
+                REINICIAR
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = ""; 
+        let stream = null;
+        let isScanning = false;
+        let scanProgress = 0;
+        let scanInterval = null;
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const setupView = document.getElementById('setup-view');
+        const cameraView = document.getElementById('camera-view');
+        const resultsView = document.getElementById('results-view');
+        const analysisLoader = document.getElementById('analysis-loader');
+        const errorModal = document.getElementById('error-modal');
+        const boxOverlay = document.getElementById('box-overlay');
+        const capturedImage = document.getElementById('captured-image');
+        
+        lucide.createIcons();
+
+        async function startCamera() {
+            setupView.classList.add('hidden');
+            cameraView.classList.remove('hidden');
+            try {
+                const constraints = { video: { facingMode: 'environment' }, audio: false };
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+            } catch (err) {
+                showError("Permissão de câmara negada.");
+            }
+        }
+
+        function captureFrame() {
+            if (video.readyState < 2) return null;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        }
+
+        function startScan(e) {
+            if (isScanning || resultsView.offsetParent !== null || !stream) return;
+            isScanning = true;
+            scanProgress = 0;
+            document.getElementById('progress-container').classList.remove('hidden');
+            document.getElementById('scan-frame').classList.add('scan-frame-active');
+
+            scanInterval = setInterval(() => {
+                scanProgress += 5;
+                document.getElementById('progress-bar').style.width = `${scanProgress}%`;
+                if (scanProgress >= 100) stopScan(true);
+            }, 100);
+        }
+
+        function stopScan(completed = false) {
+            clearInterval(scanInterval);
+            isScanning = false;
+            document.getElementById('progress-container').classList.add('hidden');
+            document.getElementById('scan-frame').classList.remove('scan-frame-active');
+            if (completed) processAnalysis();
+        }
+
+        async function processAnalysis() {
+            const imageData = captureFrame();
+            if (!imageData) return;
+
+            analysisLoader.classList.remove('hidden');
+            capturedImage.src = imageData;
+
+            const prompt = `Analise este frame e forneça dados químicos e espaciais.
+            Retorne OBRIGATORIAMENTE um JSON:
+            {
+              "name": "Nome do Objeto Principal",
+              "summary": "Resumo",
+              "elements": [{"element": "Nome", "symbol": "X", "percentage": "Y%", "description": "Z"}],
+              "spatial": {
+                "width": "cm ou m",
+                "height": "cm ou m",
+                "objects": [{"label": "Nome", "box_2d": [ymin, xmin, ymax, xmax], "distance_to_center": "valor"}],
+                "distances": ["Texto descrevendo distância entre objeto A e B"]
+              }
+            }`;
+
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }
+                    ]
+                }],
+                generationConfig: { responseMimeType: "application/json" }
+            };
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                const result = JSON.parse(data.candidates[0].content.parts[0].text);
+                displayResults(result);
+            } catch (err) {
+                showError("Erro na análise atómica e espacial.");
+            } finally {
+                analysisLoader.classList.add('hidden');
+            }
+        }
+
+        function displayResults(data) {
+            cameraView.classList.add('hidden');
+            resultsView.classList.remove('hidden');
+            document.getElementById('reset-btn').classList.remove('hidden');
+
+            document.getElementById('result-name').innerText = data.name;
+            document.getElementById('result-summary').innerText = data.summary;
+            document.getElementById('spatial-width').innerText = data.spatial.width;
+            document.getElementById('spatial-height').innerText = data.spatial.height;
+
+            // Desenhar Bounding Boxes
+            boxOverlay.innerHTML = '';
+            if (data.spatial.objects) {
+                data.spatial.objects.forEach(obj => {
+                    const [ymin, xmin, ymax, xmax] = obj.box_2d;
+                    const box = document.createElement('div');
+                    box.className = 'bounding-box';
+                    box.style.top = `${ymin / 10}%`;
+                    box.style.left = `${xmin / 10}%`;
+                    box.style.width = `${(xmax - xmin) / 10}%`;
+                    box.style.height = `${(ymax - ymin) / 10}%`;
+                    box.innerHTML = `<span class="box-label">${obj.label}</span>`;
+                    boxOverlay.appendChild(box);
+                });
+            }
+
+            // Lista Quimica
+            const elList = document.getElementById('elements-list');
+            elList.innerHTML = '';
+            data.elements.forEach(el => {
+                const item = document.createElement('div');
+                item.className = "bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center gap-4";
+                item.innerHTML = `
+                    <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center font-black">${el.symbol}</div>
+                    <div><h4 class="font-bold text-white">${el.element} (${el.percentage})</h4><p class="text-[10px] text-slate-500">${el.description}</p></div>
+                `;
+                elList.appendChild(item);
+            });
+
+            // Distâncias
+            const distList = document.getElementById('distances-list');
+            distList.innerHTML = '';
+            data.spatial.distances.forEach(d => {
+                const li = document.createElement('li');
+                li.className = "flex items-start gap-2 italic";
+                li.innerHTML = `<i data-lucide="arrow-right-left" class="w-3 h-3 mt-1 text-blue-400"></i> ${d}`;
+                distList.appendChild(li);
+            });
+            lucide.createIcons();
+        }
+
+        // Tabs
+        document.getElementById('tab-chemistry').onclick = () => {
+            toggleTab('chemistry');
+        };
+        document.getElementById('tab-spatial').onclick = () => {
+            toggleTab('spatial');
+        };
+
+        function toggleTab(type) {
+            const isChem = type === 'chemistry';
+            document.getElementById('content-chemistry').classList.toggle('hidden', !isChem);
+            document.getElementById('content-spatial').classList.toggle('hidden', isChem);
+            document.getElementById('tab-chemistry').className = isChem ? 
+                "py-3 px-4 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-2" :
+                "py-3 px-4 rounded-xl text-slate-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2";
+            document.getElementById('tab-spatial').className = !isChem ? 
+                "py-3 px-4 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-2" :
+                "py-3 px-4 rounded-xl text-slate-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2";
+        }
+
+        function showError(msg) {
+            document.getElementById('error-message').innerText = msg;
+            errorModal.classList.remove('hidden');
+        }
+
+        function reset() {
+            resultsView.classList.add('hidden');
+            cameraView.classList.remove('hidden');
+            document.getElementById('reset-btn').classList.add('hidden');
+            toggleTab('chemistry');
+        }
+
+        document.getElementById('start-camera-btn').onclick = startCamera;
+        document.getElementById('new-analysis-btn').onclick = reset;
+        document.getElementById('reset-btn').onclick = reset;
+        document.getElementById('error-close-btn').onclick = () => { errorModal.classList.add('hidden'); reset(); };
+
+        video.addEventListener('touchstart', (e) => { if(e.cancelable) e.preventDefault(); startScan(); }, {passive:false});
+        video.addEventListener('touchend', stopScan);
+        video.addEventListener('mousedown', startScan);
+        video.addEventListener('mouseup', stopScan);
+    </script>
+</body>
+</html>
+
         <button id="reset-btn" class="hidden p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
             <i data-lucide="refresh-cw" class="w-5 h-5 text-slate-300"></i>
         </button>
@@ -685,5 +1051,6 @@
     </script>
 </body>
 </html>
+
 
 
