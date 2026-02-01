@@ -19,21 +19,359 @@
             transform: scale(1.05);
         }
 
-        .loading-shimmer {
-            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-        }
-
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-
         /* Hide scrollbar */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="p-4 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800 flex items-center justify-between z-50">
+        <div class="flex items-center gap-2">
+            <div class="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-900/40">
+                <i data-lucide="atom" class="text-white w-6 h-6"></i>
+            </div>
+            <h1 class="font-bold text-xl tracking-tight text-white">ChemScan <span class="text-blue-500 font-light text-sm">PRO</span></h1>
+        </div>
+        <button id="reset-btn" class="hidden p-2 bg-slate-800 rounded-full active:scale-90 transition-transform">
+            <i data-lucide="refresh-cw" class="w-5 h-5 text-slate-300"></i>
+        </button>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 relative flex flex-col bg-black overflow-hidden">
+        
+        <!-- Camera Activation View -->
+        <div id="setup-view" class="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-8 bg-slate-950 z-40">
+            <div class="p-8 rounded-full bg-slate-900 border-4 border-blue-500/30 animate-pulse">
+                <i data-lucide="power" class="w-12 h-12 text-blue-500"></i>
+            </div>
+            <div class="space-y-4">
+                <h2 class="text-2xl font-black text-white">Pronto para Iniciar</h2>
+                <p class="text-slate-400 text-sm max-w-xs mx-auto leading-relaxed">
+                    Clique no botão abaixo para ligar os sensores e começar a análise atómica de objetos em tempo real.
+                </p>
+            </div>
+            <button id="start-camera-btn" class="w-full max-w-xs py-5 bg-blue-600 hover:bg-blue-500 text-white font-black text-lg rounded-2xl shadow-2xl shadow-blue-900/40 flex items-center justify-center gap-3 active:scale-95 transition-all">
+                <i data-lucide="camera" class="w-6 h-6"></i>
+                LIGAR CÂMARA
+            </button>
+        </div>
+
+        <!-- Camera Viewport -->
+        <div id="camera-view" class="hidden relative flex-1">
+            <video id="video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover z-10"></video>
+            
+            <!-- Scan Interface -->
+            <div class="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center">
+                <div id="scan-frame" class="w-72 h-72 border-2 border-white/20 rounded-[2.5rem] transition-all duration-300 flex items-center justify-center relative">
+                    <i data-lucide="scan" id="scan-icon" class="text-white/20 w-10 h-10 transition-all"></i>
+                    
+                    <!-- Corner Accents -->
+                    <div class="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-blue-500/40 rounded-tl-[2.5rem]"></div>
+                    <div class="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-blue-500/40 rounded-br-[2.5rem]"></div>
+                </div>
+
+                <div class="mt-12 text-center">
+                    <div id="status-container" class="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
+                        <p id="status-text" class="text-white font-bold text-xs uppercase tracking-widest">Segure na tela para escanear</p>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div id="progress-container" class="hidden absolute bottom-20 left-10 right-10 h-1.5 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm border border-white/5">
+                    <div id="progress-bar" class="h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] transition-all duration-100 w-0"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results View -->
+        <div id="results-view" class="hidden flex-1 overflow-y-auto p-6 space-y-6 bg-slate-950 no-scrollbar pb-32">
+            <div class="bg-slate-900 rounded-[2rem] p-8 border border-slate-800 relative overflow-hidden shadow-2xl">
+                <div class="absolute top-0 right-0 p-4 opacity-5">
+                    <i data-lucide="atom" class="w-24 h-24"></i>
+                </div>
+                <span class="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em]">Análise de Espectro</span>
+                <h2 id="result-name" class="text-4xl font-black mt-2 text-white leading-none">---</h2>
+                <p id="result-summary" class="text-slate-400 mt-4 text-sm leading-relaxed font-medium italic">A carregar descrição...</p>
+            </div>
+
+            <div class="space-y-4">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Composição Atómica</h3>
+                <div id="elements-list" class="grid gap-3">
+                    <!-- Element cards injected here -->
+                </div>
+            </div>
+
+            <div class="fixed bottom-8 left-8 right-8 z-50">
+                <button id="new-analysis-btn" class="w-full py-5 bg-white text-black font-black text-lg rounded-2xl shadow-2xl active:scale-95 transition-all">
+                    NOVA ANÁLISE
+                </button>
+            </div>
+        </div>
+
+        <!-- Hidden canvas for image capture -->
+        <canvas id="canvas" class="hidden"></canvas>
+    </main>
+
+    <!-- Overlay Loader -->
+    <div id="analysis-loader" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-10 text-center">
+        <div class="relative">
+            <div class="w-20 h-20 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+            <i data-lucide="search" class="absolute inset-0 m-auto w-8 h-8 text-blue-500 animate-pulse"></i>
+        </div>
+        <h3 class="mt-8 text-xl font-black text-white">Descodificando Matéria</h3>
+        <p class="mt-2 text-slate-400 text-sm">Consultando base de dados atómica do Gemini...</p>
+    </div>
+
+    <!-- Error Toast -->
+    <div id="error-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm">
+        <div class="bg-slate-900 border border-red-500/50 p-6 rounded-3xl max-w-sm w-full shadow-2xl">
+            <div class="flex items-center gap-3 text-red-400 mb-4">
+                <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                <h3 class="font-bold text-lg">Houve um erro</h3>
+            </div>
+            <p id="error-message" class="text-slate-300 text-sm mb-6 leading-relaxed">Ocorreu um problema ao analisar a imagem.</p>
+            <button id="error-close-btn" class="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors font-bold">
+                Tentar novamente
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Configuração
+        const apiKey = ""; // Injetada pelo ambiente
+        let stream = null;
+        let isScanning = false;
+        let scanProgress = 0;
+        let scanInterval = null;
+
+        // Elementos DOM
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const setupView = document.getElementById('setup-view');
+        const cameraView = document.getElementById('camera-view');
+        const resultsView = document.getElementById('results-view');
+        const analysisLoader = document.getElementById('analysis-loader');
+        const errorModal = document.getElementById('error-modal');
+        
+        const progressBar = document.getElementById('progress-bar');
+        const progressContainer = document.getElementById('progress-container');
+        const scanFrame = document.getElementById('scan-frame');
+        const scanIcon = document.getElementById('scan-icon');
+        const statusText = document.getElementById('status-text');
+
+        // Inicializar ícones
+        lucide.createIcons();
+
+        async function startCamera() {
+            setupView.classList.add('hidden');
+            cameraView.classList.remove('hidden');
+            
+            try {
+                const constraints = {
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    video.play().catch(e => showError("O vídeo não pôde ser iniciado. Recarregue a página."));
+                };
+            } catch (err) {
+                console.error(err);
+                showError("Erro de Permissão: Verifique se o navegador tem acesso à câmara nas definições do sistema.");
+            }
+        }
+
+        function captureFrame() {
+            if (video.readyState < 2) return null; // Garante que há vídeo pronto
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        }
+
+        function startScan(e) {
+            if (isScanning || resultsView.offsetParent !== null || !stream) return;
+            
+            isScanning = true;
+            scanProgress = 0;
+            progressBar.style.width = '0%';
+            progressContainer.classList.remove('hidden');
+            scanFrame.classList.add('scan-frame-active');
+            scanIcon.classList.add('text-blue-500', 'opacity-100');
+            statusText.innerText = "A capturar espectro...";
+
+            scanInterval = setInterval(() => {
+                scanProgress += 5; // Acelerei um pouco para 2 segundos reais
+                progressBar.style.width = `${scanProgress}%`;
+                
+                if (scanProgress >= 100) {
+                    stopScan(true);
+                }
+            }, 100);
+        }
+
+        function stopScan(completed = false) {
+            clearInterval(scanInterval);
+            isScanning = false;
+            
+            if (!completed) {
+                progressContainer.classList.add('hidden');
+                progressBar.style.width = '0%';
+                scanFrame.classList.remove('scan-frame-active');
+                scanIcon.classList.remove('text-blue-500', 'opacity-100');
+                statusText.innerText = "Segure na tela para escanear";
+            } else {
+                processAnalysis();
+            }
+        }
+
+        async function processAnalysis() {
+            const imageData = captureFrame();
+            if (!imageData) {
+                showError("A câmara não está a gerar imagem. Tente novamente.");
+                return;
+            }
+
+            analysisLoader.classList.remove('hidden');
+
+            const prompt = `Identifica o objeto principal nesta imagem e lista a sua composição química provável baseada na tabela periódica. 
+            Retorna OBRIGATORIAMENTE apenas um objeto JSON válido.
+            Formato:
+            {
+              "name": "Nome do objeto",
+              "elements": [
+                { "element": "Nome do Elemento", "symbol": "Símbolo", "percentage": "X%", "description": "Motivo" }
+              ],
+              "summary": "Resumo da composição"
+            }`;
+
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }
+                    ]
+                }],
+                generationConfig: { 
+                    responseMimeType: "application/json" 
+                }
+            };
+
+            try {
+                const fetchWithRetry = async (retries = 3) => {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) {
+                        const errBody = await response.text();
+                        console.error("Erro API:", errBody);
+                        if (retries > 0) {
+                            await new Promise(r => setTimeout(r, 1000));
+                            return fetchWithRetry(retries - 1);
+                        }
+                        throw new Error("Erro de Ligação");
+                    }
+                    return response.json();
+                };
+
+                const data = await fetchWithRetry();
+                
+                if (!data.candidates || data.candidates.length === 0) {
+                    throw new Error("Nenhum resultado");
+                }
+
+                let textResponse = data.candidates[0].content.parts[0].text;
+                // Limpeza de blocos de código se a IA os tiver incluído por engano
+                textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                const result = JSON.parse(textResponse);
+                displayResults(result);
+            } catch (err) {
+                console.error("Erro de Processamento:", err);
+                showError("A análise falhou. Verifique a ligação à internet e certifique-se que o objeto está bem iluminado.");
+            } finally {
+                analysisLoader.classList.add('hidden');
+                stopScan(false); // Reset visual
+            }
+        }
+
+        function displayResults(data) {
+            cameraView.classList.add('hidden');
+            resultsView.classList.remove('hidden');
+            document.getElementById('reset-btn').classList.remove('hidden');
+
+            document.getElementById('result-name').innerText = data.name || "Desconhecido";
+            document.getElementById('result-summary').innerText = data.summary || "Sem descrição disponível.";
+
+            const list = document.getElementById('elements-list');
+            list.innerHTML = '';
+
+            if (data.elements && Array.isArray(data.elements)) {
+                data.elements.forEach((el, i) => {
+                    const card = document.createElement('div');
+                    card.className = "bg-slate-900/60 backdrop-blur-sm border border-slate-800 p-5 rounded-2xl flex items-center gap-5";
+                    card.innerHTML = `
+                        <div class="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl flex flex-col items-center justify-center shadow-lg shrink-0">
+                            <span class="text-[10px] text-white/60 font-mono mb-1">${i+1}</span>
+                            <span class="font-black text-2xl text-white">${el.symbol || '?'}</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-center mb-1">
+                                <h4 class="font-bold text-slate-100 text-lg truncate">${el.element || '---'}</h4>
+                                <span class="text-[11px] font-black text-blue-400 bg-blue-400/10 px-2 py-1 rounded-lg">${el.percentage || '-'}</span>
+                            </div>
+                            <p class="text-xs text-slate-500 leading-tight italic line-clamp-2">${el.description || ''}</p>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('error-message').innerText = msg;
+            errorModal.classList.remove('hidden');
+        }
+
+        function reset() {
+            resultsView.classList.add('hidden');
+            document.getElementById('reset-btn').classList.add('hidden');
+            cameraView.classList.remove('hidden');
+            stopScan();
+        }
+
+        // Listeners
+        document.getElementById('start-camera-btn').addEventListener('click', startCamera);
+        document.getElementById('new-analysis-btn').addEventListener('click', reset);
+        document.getElementById('reset-btn').addEventListener('click', reset);
+        document.getElementById('error-close-btn').addEventListener('click', () => {
+            errorModal.classList.add('hidden');
+            reset();
+        });
+
+        // Eventos de toque/rato no vídeo
+        video.addEventListener('mousedown', startScan);
+        video.addEventListener('mouseup', stopScan);
+        video.addEventListener('touchstart', (e) => { 
+            if (e.cancelable) e.preventDefault(); 
+            startScan(); 
+        }, { passive: false });
+        video.addEventListener('touchend', stopScan);
+
+    </script>
+</body>
+</html>
+
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-hidden">
 
@@ -347,4 +685,5 @@
     </script>
 </body>
 </html>
+
 
